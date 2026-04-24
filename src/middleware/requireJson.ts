@@ -19,27 +19,24 @@ export const requireJson = (req: Request, res: Response, next: NextFunction) => 
     return next()
   }
 
-  // Check if the request has a body (Content-Length header or body property)
   const contentLength = req.headers['content-length']
   const hasBody = contentLength && parseInt(contentLength, 10) > 0
 
-  // If there's no body, allow the request to proceed
   if (!hasBody) {
     return next()
   }
 
-  // For requests with bodies, enforce application/json content type
   const contentType = req.headers['content-type']
   
-  if (!contentType || !contentType.includes('application/json')) {
+  if (!contentType || !contentType.toLowerCase().includes('application/json')) {
     return res.status(415).json({
       error: 'Unsupported Media Type: Content-Type must be application/json'
     })
   }
 
-  // Check for charset parameter and ensure it's utf-8 if present
-  if (contentType.includes('charset')) {
-    const charsetMatch = contentType.match(/charset=([^;]+)/i)
+  const lowerContentType = contentType.toLowerCase()
+  if (lowerContentType.includes('charset')) {
+    const charsetMatch = lowerContentType.match(/charset=([^;]+)/i)
     if (charsetMatch && charsetMatch[1].trim().toLowerCase() !== 'utf-8') {
       return res.status(415).json({
         error: 'Unsupported Media Type: Only UTF-8 charset is supported for JSON'
