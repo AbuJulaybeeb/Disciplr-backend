@@ -55,7 +55,7 @@ export const requireVerifier = enforceRBAC({
 
 export const requireAdmin = enforceRBAC({
   allow: [UserRole.ADMIN],
-});
+})
 
 // Middleware to check if verifier has an active profile
 export const requireActiveVerifier = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
