@@ -1,21 +1,22 @@
 import { Router, type Request, type Response } from 'express'
 import { authenticate } from '../middleware/auth.middleware.js'
 import { UserRole } from '../types/user.js'
-import { VaultService } from '../services/vault.service.js'
 import { applyFilters, applySort, paginateArray } from '../utils/pagination.js'
 import { updateAnalyticsSummary } from '../db/database.js'
 import { createAuditLog } from '../lib/audit-logs.js'
 import {
+  IdempotencyConflictError,
   getIdempotentResponse,
   hashRequestPayload,
   saveIdempotentResponse,
-  IdempotencyConflictError,
 } from '../services/idempotency.js'
 import { buildVaultCreationPayload } from '../services/soroban.js'
 import { createVaultWithMilestones, getVaultById, listVaults, cancelVaultById } from '../services/vaultStore.js'
 import { createVaultSchema, flattenZodErrors } from '../services/vaultValidation.js'
 import { queryParser } from '../middleware/queryParser.js'
 import { utcNow } from '../utils/timestamps.js'
+import { prisma } from '../lib/prisma.js'
+import { requireJson } from '../middleware/requireJson.js'
 import type { VaultCreateResponse } from '../types/vaults.js'
 
 export const vaultsRouter = Router()
@@ -28,16 +29,16 @@ export interface Vault {
   id: string
   creator: string
   amount: string
-  status: 'draft' | 'active' | 'completed' | 'failed' | 'cancelled'
+  status: 'active' | 'completed' | 'failed' | 'cancelled'
   startTimestamp: string
   endTimestamp: string
   successDestination: string
   failureDestination: string
-  verifier?: string
   createdAt: string
 }
 
 // GET /api/vaults
+
 vaultsRouter.get(
   '/',
   authenticate,
@@ -60,6 +61,11 @@ vaultsRouter.get(
   },
 )
 
+/**
+ * POST /api/vaults
+ */
+vaultsRouter.post('/', authenticate, requireJson, async (req: Request, res: Response) => {
+  const { creator, amount, endTimestamp, successDestination, failureDestination, milestoneHash, verifierAddress, contractId } = req.body
 // POST /api/vaults 
 
 vaultsRouter.post('/', authenticate, async (req: Request, res: Response) => {
@@ -96,6 +102,11 @@ vaultsRouter.post('/', authenticate, async (req: Request, res: Response) => {
   try {
     const { vault } = await createVaultWithMilestones(input)
 
+  // 2. Try In-memory
+  const vault = vaults.find(v => v.id === req.params.id)
+  if (!vault) {
+    res.status(404).json({ error: 'Vault not found' })
+    return
     const responseBody: VaultCreateResponse = {
       vault,
       onChain: await buildVaultCreationPayload(input, vault),
@@ -103,9 +114,10 @@ vaultsRouter.post('/', authenticate, async (req: Request, res: Response) => {
     }
 
     if (idempotencyKey) {
-      await saveIdempotentResponse(idempotencyKey, requestHash, vault.id, responseBody)
+      await saveIdempotentResponse(idempotencyKey!, requestHash, vault.id, responseBody)
     }
 
+    try {
     const actorUserId = (req.header('x-user-id') ?? input.creator) || req.user?.userId || 'unknown'
     createAuditLog({
       actor_user_id: actorUserId,
@@ -122,11 +134,14 @@ vaultsRouter.post('/', authenticate, async (req: Request, res: Response) => {
     console.error('Vault creation failed', error)
     res.status(500).json({ error: 'Failed to create vault.' })
   }
-})
+}
 
+/**
+ * POST /api/vaults/:id/cancel
+ */
+vaultsRouter.post('/:id/cancel', authenticate, requireJson, async (req, res) => {
 // ─── GET /api/vaults/:id ─────────────────────────────────────────────────────
 
-// GET /api/vaults/:id
 vaultsRouter.get('/:id', authenticate, async (req: Request, res: Response) => {
   // Try DB-backed store first (falls back to in-memory automatically)
   try {
@@ -150,7 +165,8 @@ vaultsRouter.get('/:id', authenticate, async (req: Request, res: Response) => {
   res.json(vault)
 })
 
-// POST /api/vaults/:id/cancel
+// ─── POST /api/vaults/:id/cancel ─────────────────────────────────────────────
+
 vaultsRouter.post('/:id/cancel', authenticate, async (req, res) => {
   const actorUserId = req.user!.userId
   const actorRole = req.user!.role
