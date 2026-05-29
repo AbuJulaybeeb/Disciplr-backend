@@ -542,6 +542,42 @@ impl AccountabilityVault {
         }
         false
     }
+
+    /// Reclaim any residual token balance left in the contract after a vault
+    /// has reached a terminal settlement. This transfers the contract's token
+    /// balance to the vault creator.
+    ///
+    /// Requirements:
+    /// - Caller must be the `creator` (authorization enforced)
+    /// - Vault must be settled (no staked amount remaining)
+    pub fn reclaim_after_settlement(
+        env: Env,
+        vault: Vault,
+        token_address: Address,
+    ) -> Result<(), Error> {
+        // Ensure the caller is the creator
+        let creator_addr = Address::from_string(&vault.creator);
+        creator_addr.require_auth();
+
+        // Conservatively require the tracked staked amount to be zero before
+        // sweeping any residuals. This keeps semantics clear: reclaiming is
+        // only allowed once the vault has no outstanding stake.
+        if vault.amount != 0 {
+            return Err(Error::StakedRemaining);
+        }
+
+        // Use the on-chain contract address as the token holder to sweep from
+        let contract_addr = env.current_contract_address();
+        let token = TokenClient::new(&env, &token_address);
+
+        // Query contract's token balance and transfer any leftover to creator
+        let bal: i128 = token.balance(&contract_addr);
+        if bal > 0 {
+            token.transfer(&contract_addr, &creator_addr, &bal);
+        }
+
+        Ok(())
+    }
 }
 
 mod test;
