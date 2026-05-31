@@ -93,7 +93,7 @@ export const envSchema = z
     SOROBAN_NETWORK_PASSPHRASE: z.string().optional(),
     SOROBAN_SOURCE_ACCOUNT: z.string().optional(),
     STELLAR_NETWORK_PASSPHRASE: z.string().optional(),
-
+   
     // ── Job system ──────────────────────────────────────────────
     JOB_WORKER_CONCURRENCY: positiveInt(2),
     JOB_QUEUE_POLL_INTERVAL_MS: positiveInt(250),
@@ -117,6 +117,8 @@ export const envSchema = z
     SECURITY_FAILED_LOGIN_WINDOW_MS: positiveInt(900_000),
     SECURITY_FAILED_LOGIN_BURST_THRESHOLD: positiveInt(5),
     SECURITY_ALERT_COOLDOWN_MS: positiveInt(300_000),
+    ORG_RATE_LIMIT_MAX: positiveInt(200),
+    ORG_RATE_LIMIT_WINDOW_MS: positiveInt(60000),
 
     // ── Deadline / Analytics schedulers ─────────────────────────
     DEADLINE_CHECK_INTERVAL_MS: positiveInt(60_000),
