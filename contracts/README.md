@@ -87,8 +87,7 @@ hash, which is decoded to `BytesN<32>` before calling the contract.
 
 ### Arithmetic Safety
 
-The `create_vault` function validates that milestone amounts are positive and sum exactly to
-the declared `amount`, rejecting mismatches with `Error::AmountMismatch`.
+The `create_vault` function validates that every individual milestone amount is strictly positive (`amount > 0`). If any milestone has an amount `<= 0`, the contract immediately rejects the transaction with `Error::InvalidAmount`, even if valid positive milestone amounts precede or follow it. The sum of all milestone amounts must also match the declared vault `amount` exactly, otherwise the transaction is rejected with `Error::AmountMismatch`.
 
 ### Checked Milestone Access
 

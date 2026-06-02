@@ -534,6 +534,63 @@ fn test_create_vault_zero_threshold_fails() {
     );
 }
 
+#[test]
+fn test_create_vault_zero_amount_after_positives_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(1_000);
+
+    let creator = Address::generate(&env);
+    let verifier = Address::generate(&env);
+    let guardian = Address::generate(&env);
+    let success = Address::generate(&env);
+    let failure = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+
+    let (token, token_admin_client) = create_token(&env, &token_admin);
+    let amounts = [300, 0, 200];
+    let total: i128 = amounts.iter().sum();
+    token_admin_client.mint(&creator, &total);
+
+    let contract_id = env.register_contract(None, AccountabilityVault);
+    let contract = AccountabilityVaultClient::new(&env, &contract_id);
+
+    let mut milestones = vec![&env];
+    let due_dates = [100, 200, 300];
+    for (i, due) in due_dates.iter().enumerate() {
+        milestones.push_back(Milestone {
+            title: String::from_str(&env, "m"),
+            amount: amounts[i],
+            due_date: 1_000 + due,
+            verified: false,
+            released: false,
+        });
+    }
+
+    let end = 1_300;
+    let verifier_set = VerifierSet {
+        verifiers: vec![&env, verifier.clone()],
+        threshold: 1u32,
+    };
+    let vault_id = String::from_str(&env, "v1");
+
+    let result = contract.try_create_vault(
+        &vault_id,
+        &creator,
+        &verifier_set,
+        &None,
+        &token,
+        &total,
+        &success,
+        &failure,
+        &end,
+        &milestones,
+        &guardian,
+    );
+
+    assert!(matches!(result, Err(Ok(Error::InvalidAmount))));
+}
+
 // ── issue #363: oracle-driven check_in path ──────────────────────────────────
 
 #[test]
