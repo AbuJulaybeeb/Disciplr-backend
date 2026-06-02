@@ -14,6 +14,28 @@ import {
   type ExportFormat,
   type ExportScope,
 } from '../services/exportQueue.js'
+import { checkAndIncrementExportQuota } from '../services/exportQuota.js'
+import { getEnv } from '../config/index.js'
+
+const resolveOrgId = (req: AuthenticatedRequest): string =>
+  (req as any).orgId as string | undefined ?? req.user!.userId
+
+const enforceExportQuota = async (
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<boolean> => {
+  const orgId = resolveOrgId(req)
+  const result = await checkAndIncrementExportQuota(orgId, getEnv().EXPORT_DAILY_QUOTA_LIMIT)
+  if (!result.allowed) {
+    res.setHeader('Retry-After', String(result.retryAfter))
+    res.status(429).json({
+      error: 'Export quota exceeded. Try again tomorrow.',
+      retryAfter: result.retryAfter,
+    })
+    return false
+  }
+  return true
+}
 
 export function createExportRouter(jobSystem: BackgroundJobSystem): Router {
   const router = Router()
@@ -45,6 +67,8 @@ export function createExportRouter(jobSystem: BackgroundJobSystem): Router {
       return
     }
 
+    if (!await enforceExportQuota(req, res)) return
+
     try {
       const job = await enqueueExportJob(jobSystem, {
         userId: req.user!.userId,
@@ -72,6 +96,8 @@ export function createExportRouter(jobSystem: BackgroundJobSystem): Router {
       res.status(400).json({ error: 'Invalid format or scope parameter' })
       return
     }
+
+    if (!await enforceExportQuota(req, res)) return
 
     const targetUserId =
       typeof req.query.targetUserId === 'string' ? req.query.targetUserId : undefined

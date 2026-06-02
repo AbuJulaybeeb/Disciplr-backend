@@ -128,6 +128,7 @@ export const envSchema = z
     SECURITY_ALERT_COOLDOWN_MS: positiveInt(300_000),
     ORG_RATE_LIMIT_MAX: positiveInt(200),
     ORG_RATE_LIMIT_WINDOW_MS: positiveInt(60000),
+    EXPORT_DAILY_QUOTA_LIMIT: positiveInt(100),
 
     // ── Deadline / Analytics schedulers ─────────────────────────
     DEADLINE_CHECK_INTERVAL_MS: positiveInt(60_000),
